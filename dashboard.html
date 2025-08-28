@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Portal Estudiantil</title>
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span>Universidad</span>
+                </div>
+                <button class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul>
+                    <li class="nav-item active">
+                        <a href="#" data-section="dashboard">
+                            <i class="fas fa-home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" data-section="materias">
+                            <i class="fas fa-book"></i>
+                            <span>Materias</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" data-section="calificaciones">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Calificaciones</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" data-section="horario">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>Horario</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" data-section="perfil">
+                            <i class="fas fa-user"></i>
+                            <span>Perfil</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="logout-btn" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Cerrar Sesión</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="menu-toggle" id="menuToggle">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h1 id="pageTitle">Dashboard</h1>
+                </div>
+
+                <div class="topbar-right">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Buscar...">
+                    </div>
+
+                    <div class="notifications">
+                        <button class="notification-btn">
+                            <i class="fas fa-bell"></i>
+                            <span class="notification-badge">3</span>
+                        </button>
+                    </div>
+
+                    <div class="user-profile">
+                        <div class="user-avatar">
+                            <img src="https://via.placeholder.com/40x40/4F46E5/white?text=JP" alt="Usuario"
+                                id="userAvatar">
+                        </div>
+                        <div class="user-info">
+                            <span class="user-name" id="userName">Juan Pérez</span>
+                            <span class="user-role" id="userRole">Estudiante</span>
+                        </div>
+                        <button class="dropdown-toggle">
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Sections -->
+            <div class="content-wrapper">
+                <!-- Dashboard Section -->
+                <section id="dashboard-section" class="content-section active">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-book-open"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>8</h3>
+                                <p>Materias Activas</p>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>8.5</h3>
+                                <p>Promedio General</p>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-tasks"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>12</h3>
+                                <p>Tareas Pendientes</p>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-trophy"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3>156</h3>
+                                <p>Créditos Obtenidos</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-grid">
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3>Próximas Clases</h3>
+                                <button class="card-action">Ver Todas</button>
+                            </div>
+                            <div class="card-content">
+                                <div class="class-item">
+                                    <div class="class-time">09:00 AM</div>
+                                    <div class="class-info">
+                                        <h4>Matemáticas Avanzadas</h4>
+                                        <p>Aula 201 - Prof. García</p>
+                                    </div>
+                                </div>
+                                <div class="class-item">
+                                    <div class="class-time">11:00 AM</div>
+                                    <div class="class-info">
+                                        <h4>Programación Web</h4>
+                                        <p>Lab 3 - Prof. Martínez</p>
+                                    </div>
+                                </div>
+                                <div class="class-item">
+                                    <div class="class-time">02:00 PM</div>
+                                    <div class="class-info">
+                                        <h4>Base de Datos</h4>
+                                        <p>Aula 305 - Prof. López</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3>Tareas Recientes</h3>
+                                <button class="card-action">Ver Todas</button>
+                            </div>
+                            <div class="card-content">
+                                <div class="task-item">
+                                    <div class="task-status pending"></div>
+                                    <div class="task-info">
+                                        <h4>Proyecto Final - Programación</h4>
+                                        <p>Vence: 25 de Agosto</p>
+                                    </div>
+                                </div>
+                                <div class="task-item">
+                                    <div class="task-status completed"></div>
+                                    <div class="task-info">
+                                        <h4>Ensayo - Literatura</h4>
+                                        <p>Entregado</p>
+                                    </div>
+                                </div>
+                                <div class="task-item">
+                                    <div class="task-status pending"></div>
+                                    <div class="task-info">
+                                        <h4>Examen - Matemáticas</h4>
+                                        <p>Vence: 28 de Agosto</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Other sections would go here -->
+                <section id="materias-section" class="content-section">
+                    <h2>Materias</h2>
+                    <p>Sección de materias en desarrollo...</p>
+                </section>
+
+                <section id="calificaciones-section" class="content-section">
+                    <h2>Calificaciones</h2>
+                    <p>Sección de calificaciones en desarrollo...</p>
+                </section>
+
+                <section id="horario-section" class="content-section">
+                    <h2>Horario</h2>
+                    <p>Sección de horario en desarrollo...</p>
+                </section>
+
+                <section id="perfil-section" class="content-section">
+                    <h2>Perfil</h2>
+                    <p>Sección de perfil en desarrollo...</p>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/dashboard.js"></script>
+</body>
+
+</html>
