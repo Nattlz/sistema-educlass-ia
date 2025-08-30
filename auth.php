@@ -1,4 +1,9 @@
 <?php
+// Habilitar reporte de errores para debug
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+ini_set('log_errors', 1);
+
 // auth.php - Sistema de autenticación completo
 session_start();
 
@@ -19,7 +24,7 @@ $db_config = [
     'host' => 'localhost',
     'dbname' => 'sistema_login',
     'username' => 'root',
-    'password' => '',
+    'password' => 'YWizardB0309',
     'charset' => 'utf8mb4',
     'port' => 3306
 ];
@@ -33,6 +38,87 @@ $security_config = [
     'password_min_length' => 6,
     'token_length' => 32
 ];
+
+// Clase para tareas de mantenimiento
+class MaintenanceManager {
+    private $pdo;
+    
+    public function __construct($pdo) {
+        $this->pdo = $pdo;
+    }
+    
+    // Limpiar registros antiguos
+    public function cleanOldRecords() {
+        try {
+            // Limpiar intentos de login antiguos (más de 7 días)
+            $stmt = $this->pdo->prepare("
+                DELETE FROM login_attempts 
+                WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
+            ");
+            $stmt->execute();
+            
+            // Limpiar sesiones inactivas muy antiguas (más de 30 días)
+            $stmt = $this->pdo->prepare("
+                DELETE FROM sesiones 
+                WHERE activa = 0 AND fecha_creacion < DATE_SUB(NOW(), INTERVAL 30 DAY)
+            ");
+            $stmt->execute();
+            
+            // Limpiar tokens de recordar expirados
+            $stmt = $this->pdo->prepare("
+                DELETE FROM remember_tokens 
+                WHERE expires_at < DATE_SUB(NOW(), INTERVAL 1 DAY)
+            ");
+            $stmt->execute();
+            
+            return true;
+        } catch (Exception $e) {
+            error_log('Cleanup error: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+    // Obtener estadísticas del sistema
+    public function getSystemStats() {
+        try {
+            $stats = [];
+            
+            // Usuarios activos
+            $stmt = $this->pdo->prepare("SELECT COUNT(*) as count FROM usuarios WHERE activo = 1");
+            $stmt->execute();
+            $stats['active_users'] = $stmt->fetch()['count'];
+            
+            // Sesiones activas
+            $stmt = $this->pdo->prepare("
+                SELECT COUNT(*) as count FROM sesiones 
+                WHERE activa = 1 AND fecha_expiracion > NOW()
+            ");
+            $stmt->execute();
+            $stats['active_sessions'] = $stmt->fetch()['count'];
+            
+            // Intentos de login fallidos hoy
+            $stmt = $this->pdo->prepare("
+                SELECT COUNT(*) as count FROM login_attempts 
+                WHERE success = FALSE AND DATE(created_at) = CURDATE()
+            ");
+            $stmt->execute();
+            $stats['failed_logins_today'] = $stmt->fetch()['count'];
+            
+            // Intentos de login exitosos hoy
+            $stmt = $this->pdo->prepare("
+                SELECT COUNT(*) as count FROM login_attempts 
+                WHERE success = TRUE AND DATE(created_at) = CURDATE()
+            ");
+            $stmt->execute();
+            $stats['successful_logins_today'] = $stmt->fetch()['count'];
+            
+            return $stats;
+        } catch (Exception $e) {
+            error_log('Stats error: ' . $e->getMessage());
+            return [];
+        }
+    }
+}
 
 // Clase principal para manejar autenticación
 class AuthManager {
@@ -74,6 +160,7 @@ class AuthManager {
                     ip_address VARCHAR(45) NOT NULL,
                     user_agent TEXT,
                     success BOOLEAN DEFAULT FALSE,
+                    details TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     INDEX idx_matricula_time (matricula, created_at),
                     INDEX idx_ip_time (ip_address, created_at)
@@ -88,7 +175,6 @@ class AuthManager {
                     token VARCHAR(255) NOT NULL UNIQUE,
                     expires_at TIMESTAMP NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
                     INDEX idx_token (token),
                     INDEX idx_expires (expires_at)
                 )
@@ -415,6 +501,18 @@ class AuthManager {
             error_log('Remember token verification error: ' . $e->getMessage());
             return $this->sendResponse(false, 'Error al verificar token', 500);
         }
+    }
+    
+    // Método de mantenimiento
+    public function performMaintenance() {
+        $maintenance = new MaintenanceManager($this->pdo);
+        return $maintenance->cleanOldRecords();
+    }
+    
+    // Obtener estadísticas
+    public function getStats() {
+        $maintenance = new MaintenanceManager($this->pdo);
+        return $maintenance->getSystemStats();
     }
     
     // MÉTODOS PRIVADOS DE APOYO
@@ -752,105 +850,7 @@ try {
     }
 }
 
-// Clase adicional para tareas de mantenimiento
-class MaintenanceManager {
-    private $pdo;
-    
-    public function __construct($pdo) {
-        $this->pdo = $pdo;
-    }
-    
-    // Limpiar registros antiguos
-    public function cleanOldRecords() {
-        try {
-            // Limpiar intentos de login antiguos (más de 7 días)
-            $stmt = $this->pdo->prepare("
-                DELETE FROM login_attempts 
-                WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
-            ");
-            $stmt->execute();
-            
-            // Limpiar sesiones inactivas muy antiguas (más de 30 días)
-            $stmt = $this->pdo->prepare("
-                DELETE FROM sesiones 
-                WHERE activa = 0 AND fecha_creacion < DATE_SUB(NOW(), INTERVAL 30 DAY)
-            ");
-            $stmt->execute();
-            
-            // Limpiar tokens de recordar expirados
-            $stmt = $this->pdo->prepare("
-                DELETE FROM remember_tokens 
-                WHERE expires_at < DATE_SUB(NOW(), INTERVAL 1 DAY)
-            ");
-            $stmt->execute();
-            
-            return true;
-        } catch (Exception $e) {
-            error_log('Cleanup error: ' . $e->getMessage());
-            return false;
-        }
-    }
-    
-    // Obtener estadísticas del sistema
-    public function getSystemStats() {
-        try {
-            $stats = [];
-            
-            // Usuarios activos
-            $stmt = $this->pdo->prepare("SELECT COUNT(*) as count FROM usuarios WHERE activo = 1");
-            $stmt->execute();
-            $stats['active_users'] = $stmt->fetch()['count'];
-            
-            // Sesiones activas
-            $stmt = $this->pdo->prepare("
-                SELECT COUNT(*) as count FROM sesiones 
-                WHERE activa = 1 AND fecha_expiracion > NOW()
-            ");
-            $stmt->execute();
-            $stats['active_sessions'] = $stmt->fetch()['count'];
-            
-            // Intentos de login fallidos hoy
-            $stmt = $this->pdo->prepare("
-                SELECT COUNT(*) as count FROM login_attempts 
-                WHERE success = FALSE AND DATE(created_at) = CURDATE()
-            ");
-            $stmt->execute();
-            $stats['failed_logins_today'] = $stmt->fetch()['count'];
-            
-            // Intentos de login exitosos hoy
-            $stmt = $this->pdo->prepare("
-                SELECT COUNT(*) as count FROM login_attempts 
-                WHERE success = TRUE AND DATE(created_at) = CURDATE()
-            ");
-            $stmt->execute();
-            $stats['successful_logins_today'] = $stmt->fetch()['count'];
-            
-            return $stats;
-        } catch (Exception $e) {
-            error_log('Stats error: ' . $e->getMessage());
-            return [];
-        }
-    }
-}
-
-// Agregar método de mantenimiento a AuthManager
-if (class_exists('AuthManager')) {
-    class_alias('AuthManager', 'AuthManagerBase');
-    
-    class AuthManager extends AuthManagerBase {
-        public function performMaintenance() {
-            $maintenance = new MaintenanceManager($this->pdo);
-            return $maintenance->cleanOldRecords();
-        }
-        
-        public function getStats() {
-            $maintenance = new MaintenanceManager($this->pdo);
-            return $maintenance->getSystemStats();
-        }
-    }
-}
-
-// Funciones auxiliares globales para uso en otras partes del sistema
+// FUNCIONES AUXILIARES GLOBALES
 
 /**
  * Verificar si el usuario tiene permisos para una acción

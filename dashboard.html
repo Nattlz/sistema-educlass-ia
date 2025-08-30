@@ -1,16 +1,2279 @@
-<!DOCTYPE html>
+<script src="js/dashboard.js"></script>
+    <script>
+        // JavaScript específico para el dashboard integrado
+        
+        // Funciones para estudiantes (actualizadas para usar BD)
+        function viewTaskDetails(taskId) {
+            viewTaskDetailsDB(taskId);
+        }
+        
+        function submitTask(taskId) {
+            submitTaskDB(taskId);
+        }
+        
+        function viewRubricForStudent(rubricId) {
+            showModal('studentRubricModal');
+        }
+        
+        function submitTaskStudent(taskId) {
+            submitTaskDB(taskId);
+        }
+        
+        // Función mejorada para enviar tarea del estudiante
+        function submitStudentTask() {
+            if (typeof submitStudentTaskDB === 'function') {
+                submitStudentTaskDB();
+            } else {
+                // Fallback a la función anterior si la nueva no está disponible
+                submitStudentTaskOriginal();
+            }
+        }
+        
+        // Función original como respaldo
+        function submitStudentTaskOriginal() {
+            const form = document.getElementById('studentTaskForm');
+            const formData = new FormData(form);
+            
+            // Validar checklist
+            const checkedItems = document.querySelectorAll('input[name="checklist"]:checked');
+            if (checkedItems.length < 4) {
+                showNotification('Por favor completa todos los elementos de la lista de verificación', 'warning');
+                return;
+            }
+            
+            // Validar archivos
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files.length) {
+                showNotification('Por favor adjunta la síntesis escrita', 'warning');
+                return;
+            }
+            
+            showLoading('Enviando tarea...');
+            
+            // Simular envío para demo
+            setTimeout(() => {
+                hideLoading();
+                closeModal('submitTaskModal');
+                showNotification('¡Tarea entregada exitosamente!', 'success');
+                updateTaskStatus();
+            }, 2000);
+        }
+        
+        // Función para usar la nueva API de envío
+        window.submitStudentTaskDB = async function() {
+            await submitStudentTask();
+        };
+        
+        function saveSubmissionDraft() {
+            showNotification('Borrador guardado automáticamente', 'info');
+        }
+        
+        function updateTaskStatus() {
+            // Actualizar el estado de la tarea en la interfaz
+            const taskCard = document.querySelector('.task-card.urgent');
+            if (taskCard) {
+                const statusIndicator = taskCard.querySelector('.task-status');
+                if (statusIndicator) {
+                    statusIndicator.className = 'task-status completed';
+                }
+                
+                const actionsContainer = taskCard.querySelector('.task-actions');
+                if (actionsContainer) {
+                    actionsContainer.innerHTML = `
+                        <span class="delivery-status">
+                            <i class="fas fa-check-circle"></i> Entregada
+                        </span>
+                        <small>Enviada el ${new Date().toLocaleDateString()}</small>
+                    `;
+                }
+            }
+            
+            // Actualizar contador de tareas pendientes
+            const pendingCounter = document.getElementById('studentTareasPendientes');
+            if (pendingCounter) {
+                const currentCount = parseInt(pendingCounter.textContent);
+                if (currentCount > 0) {
+                    animateCounter('#studentTareasPendientes', currentCount - 1);
+                }
+            }
+        }
+        
+        // Funciones para profesores (actualizadas)
+        function viewGrades(subjectCode) {
+            window.open(`task-management.html?subject=${subjectCode}&tab=submissions`, '_blank');
+        }
+        
+        // Configurar upload de archivos
+        document.addEventListener('DOMContentLoaded', function() {
+            setupFileUpload();
+            initializeDashboardByRole();
+        });
+        
+        // Inicializar dashboard según rol del usuario
+        async function initializeDashboardByRole() {
+            // Esperar a que se cargue currentUser
+            let attempts = 0;
+            while (!window.currentUser && attempts < 50) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                attempts++;
+            }
+            
+            if (window.currentUser) {
+                setupDashboardByRole(window.currentUser.role);
+                
+                // Cargar datos específicos del usuario
+                if (window.currentUser.role === 'profesor' || window.currentUser.role === 'admin') {
+                    await loadProfessorDashboardData();
+                } else {
+                    await loadStudentDashboardData();
+                }
+            }
+        }
+        
+        // Configurar dashboard según el rol
+        function setupDashboardByRole(userRole) {
+            if (userRole === 'profesor' || userRole === 'admin') {
+                // Mostrar dashboard de profesor
+                document.getElementById('student-dashboard').style.display = 'none';
+                document.getElementById('professor-dashboard').style.display = 'block';
+                
+                // Mostrar navegación de profesor
+                document.querySelectorAll('.professor-only').forEach(item => {
+                    item.style.display = 'block';
+                });
+                
+                // Ocultar navegación de estudiante
+                document.querySelectorAll('.student-only').forEach(item => {
+                    item.style.display = 'none';
+                });
+                
+            } else {
+                // Mostrar dashboard de estudiante (por defecto)
+                document.getElementById('student-dashboard').style.display = 'block';
+                document.getElementById('professor-dashboard').style.display = 'none';
+                
+                // Mostrar navegación de estudiante
+                document.querySelectorAll('.student-only').forEach(item => {
+                    item.style.display = 'block';
+                });
+                
+                // Ocultar navegación de profesor
+                document.querySelectorAll('.professor-only').forEach(item => {
+                    item.style.display = 'none';
+                });
+            }
+        }
+        
+        function setupFileUpload() {
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+            const uploadedFiles = document.getElementById('uploadedFiles');
+            const fileList = document.getElementById('fileList');
+            
+            if (!uploadArea || !fileInput) return;
+            
+            // Click para seleccionar archivos
+            uploadArea.addEventListener('click', () => fileInput.click());
+            
+            // Drag and drop
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+            
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+            
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                handleFiles(files);
+            });
+            
+            // Selección de archivos
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+        }
+        
+        function handleFiles(files) {
+            const uploadedFiles = document.getElementById('uploadedFiles');
+            const fileList = document.getElementById('fileList');
+            
+            if (files.length > 0) {
+                uploadedFiles.style.display = 'block';
+                fileList.innerHTML = '';
+                
+                Array.from(files).forEach((file, index) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.innerHTML = `
+                        <div class="file-info">
+                            <i class="fas fa-file-alt"></i>
+                            <span class="file-name">${file.name}</span>
+                            <span class="file-size">(${formatFileSize(file.size)})</span>
+                        </div>
+                        <button type="button" class="remove-file" onclick="removeFile(${index})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    fileList.appendChild(fileItem);
+                });
+            }
+        }
+        
+        function removeFile(index) {
+            const fileInput = document.getElementById('fileInput');
+            const dt = new DataTransfer();
+            
+            // Recrear FileList sin el archivo removido
+            Array.from(fileInput.files).forEach((file, i) => {
+                if (i !== index) {
+                    dt.items.add(file);
+                }
+            });
+            
+            fileInput.files = dt.files;
+            handleFiles(fileInput.files);
+            
+            if (fileInput.files.length === 0) {
+                document.getElementById('uploadedFiles').style.display = 'none';
+            }
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Funciones auxiliares para mostrar modales y notificaciones
+        function showModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.add('show');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+        
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.remove('show');
+                document.body.style.overflow = 'auto';
+            }
+        }
+        
+        function showLoading(message = 'Cargando...') {
+            let loadingElement = document.getElementById('loadingOverlay');
+            
+            if (!loadingElement) {
+                loadingElement = document.createElement('div');
+                loadingElement.id = 'loadingOverlay';
+                loadingElement.innerHTML = `
+                    <div style="
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(0, 0, 0, 0.5);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        z-index: 10002;
+                        backdrop-filter: blur(4px);
+                    ">
+                        <div style="
+                            background: white;
+                            padding: 24px;
+                            border-radius: 12px;
+                            display: flex;
+                            align-items: center;
+                            gap: 12px;
+                            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+                        ">
+                            <div style="
+                                width: 20px;
+                                height: 20px;
+                                border: 3px solid #4F46E5;
+                                border-top: 3px solid transparent;
+                                border-radius: 50%;
+                                animation: spin 1s linear infinite;
+                            "></div>
+                            <span style="color: #1E293B; font-weight: 500;">${message}</span>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(loadingElement);
+            }
+            
+            loadingElement.style.display = 'flex';
+        }
+        
+        function hideLoading() {
+            const loadingElement = document.getElementById('loadingOverlay');
+            if (loadingElement) {
+                loadingElement.style.display = 'none';
+            }
+        }
+        
+        function showNotification(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                border-radius: 8px;
+                color: white;
+                font-weight: 500;
+                z-index: 10001;
+                opacity: 0;
+                transform: translateY(20px);
+                transition: all 0.3s ease;
+                max-width: 350px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            `;
+            
+            const colors = {
+                success: '#10B981',
+                error: '#EF4444',
+                warning: '#F59E0B',
+                info: '#3B82F6'
+            };
+            
+            toast.style.background = colors[type] || colors.info;
+            toast.textContent = message;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '1';
+                toast.style.transform = 'translateY(0)';
+            }, 10);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(20px)';
+                setTimeout(() => {
+                    if (document.body.contains(toast)) {
+                        document.body.removeChild(toast);
+                    }
+                }, 300);
+            }, 5000);
+        }
+        
+        function animateCounter(selector, endValue) {
+            const element = document.querySelector(selector);
+            if (!element) return;
+            
+            const startValue = 0;
+            const duration = 1000;
+            const increment = endValue / (duration / 16);
+            let currentValue = startValue;
+            
+            const animate = () => {
+                currentValue += increment;
+                if (currentValue >= endValue) {
+                    element.textContent = endValue;
+                } else {
+                    element.textContent = Math.floor(currentValue);
+                    requestAnimationFrame(animate);
+                }
+            };
+            
+            animate();
+        }
+    </script>
+    
+    <!-- CSS adicional para animación de loading -->
+    <style>
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: modalFadeIn 0.3s ease-out;
+        }
+        
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        
+        .task-card.completed {
+            border-left-color: #10B981;
+            background: linear-gradient(135deg, #F0FDF4 0%, #F0FDF4 100%);
+        }
+        
+        .task-card.completed .task-header {
+            opacity: 0.8;
+        }
+        
+        .upload-area.dragover {
+            border-color: #4F46E5;
+            background: rgba(79, 70, 229, 0.05);
+            transform: scale(1.02);
+        }
+        
+        .toast {
+            animation: slideInRight 0.3s ease-out;
+        }
+        
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .delivery-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #10B981;
+            font-weight: 500;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 12px;
+            font-size: 14px;
+            margin: 16px 0;
+        }
+        
+        .task-details-content {
+            max-width: 100%;
+        }
+        
+        .task-info-section,
+        .task-description-section,
+        .task-instructions-section,
+        .rubric-preview-section {
+            margin-bottom: 24px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .task-instructions-section:last-child,
+        .rubric-preview-section:last-child {
+            border-bottom: none;
+        }
+        
+        .instructions-content {
+            background: #F8FAFC;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #4F46E5;
+            line-height: 1.6;
+        }
+        
+        .rubric-preview {
+            background: #F8FAFC;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .text-success { color: #10B981; }
+        .text-info { color: #3B82F6; }
+        .text-warning { color: #F59E0B; }
+        .text-error { color: #EF4444; }
+        
+        /* Mejorar la vista de materias */
+        .subject-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            transition: width 0.8s ease;
+        }
+        
+        .grades-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+        
+        .grade-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            border: 1px solid #E2E8F0;
+        }
+        
+        .grade-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .grade-header h3 {
+            margin: 0;
+            color: #1E293B;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .overall-grade {
+            font-size: 24px;
+            font-weight: 700;
+            color: #10B981;
+        }
+        
+        .grade-breakdown {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .grade-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #F8FAFC;
+            border-radius: 6px;
+        }
+        
+        .grade-name {
+            font-weight: 500;
+            color: #1E293B;
+        }
+        
+        .grade-date {
+            font-size: 12px;
+            color: #64748B;
+        }
+        
+        .grade-value {
+            font-weight: 600;
+            color: #10B981;
+        }
+        
+        .grade-value.pending {
+            color: #F59E0B;
+        }
+        
+        .schedule-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        
+        .schedule-day {
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .schedule-day h4 {
+            background: #4F46E5;
+            color: white;
+            margin: 0;
+            padding: 12px;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .schedule-slot {
+            padding: 16px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .schedule-slot:last-child {
+            border-bottom: none;
+        }
+        
+        .schedule-slot .time {
+            font-size: 12px;
+            color: #64748B;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        
+        .class-name {
+            font-weight: 600;
+            color: #1E293B;
+            margin-bottom: 4px;
+        }
+        
+        .class-location {
+            font-size: 12px;
+            color: #64748B;
+            margin-bottom: 2px;
+        }
+        
+        .class-topic {
+            font-size: 11px;
+            color: #4F46E5;
+            font-style: italic;
+        }
+        
+        /* Estilos adicionales para la integración */
+        .dashboard-api-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #64748B;
+        }
+        
+        .api-error-message {
+            background: #FEE2E2;
+            border: 1px solid #FECACA;
+            color: #991B1B;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .api-success-message {
+            background: #D1FAE5;
+            border: 1px solid #A7F3D0;
+            color: #065F46;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .data-refresh-btn {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: #4F46E5;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .data-refresh-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
+        }
+        
+        /* Responsive improvements */
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .task-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            
+            .task-actions {
+                flex-direction: column;
+                width: 100%;
+            }
+            
+            .task-actions .btn {
+                width: 100%;
+            }
+            
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    
+    <!-- Botón de refresh para datos -->
+    <button class="data-refresh-btn" id="refreshDataBtn" onclick="refreshDashboardData()" title="Actualizar datos">
+        <i class="fas fa-sync-alt"></i>
+    </button>
+    
+    <script>
+        // Función para refrescar datos del dashboard
+        async function refreshDashboardData() {
+            const refreshBtn = document.getElementById('refreshDataBtn');
+            if (refreshBtn) {
+                refreshBtn.style.animation = 'spin 1s linear infinite';
+            }
+            
+            try {
+                await loadDashboardData();
+                showNotification('Datos actualizados correctamente', 'success');
+            } catch (error) {
+                showNotification('Error al actualizar datos', 'error');
+            } finally {
+                if (refreshBtn) {
+                    refreshBtn.style.animation = 'none';
+                }
+            }
+        }
+        
+        // Auto-refresh cada 5 minutos
+        setInterval(async () => {
+            try {
+                await loadDashboardData();
+                console.log('Dashboard data auto-refreshed');
+            } catch (error) {
+                console.error('Auto-refresh failed:', error);
+            }
+        }, 300000); // 5 minutos
+        
+        // Gestión de errores global
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Unhandled promise rejection:', event.reason);
+            showNotification('Error inesperado en la aplicación', 'error');
+        });
+        
+        window.addEventListener('error', function(event) {
+            console.error('Global error:', event.error);
+            showNotification('Error en la aplicación', 'error');
+        });
+    </script>
+</body>
+</html><!DOCTYPE html>
 <html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Portal Estudiantil</title>
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/task-management.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span>Universidad</span>
+                </div>
+                <button class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
 
+            <nav class="sidebar-nav">
+                <ul>
+                    <li class="nav-item active">
+                        <a href="#" data-section="dashboard">
+                            <i class="fas fa-home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    
+                    <!-- Navegación para Estudiantes -->
+                    <li class="nav-item student-only">
+                        <a href="#" data-section="materias">
+                            <i class="fas fa-book"></i>
+                            <span>Mis Materias</span>
+                        </a>
+                    </li>
+                    <li class="nav-item student-only">
+                        <a href="#" data-section="calificaciones">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Calificaciones</span>
+                        </a>
+                    </li>
+                    <li class="nav-item student-only">
+                        <a href="#" data-section="horario">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>Horario</span>
+                        </a>
+                    </li>
+                    <li class="nav-item student-only">
+                        <a href="#" data-section="tareas-estudiante">
+                            <i class="fas fa-tasks"></i>
+                            <span>Mis Tareas</span>
+                        </a>
+                    </li>
+                    
+                    <!-- Navegación para Profesores -->
+                    <li class="nav-item professor-only" style="display: none;">
+                        <a href="#" data-section="mis-materias">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                            <span>Mis Materias</span>
+                        </a>
+                    </li>
+                    <li class="nav-item professor-only" style="display: none;">
+                        <a href="task-management.html">
+                            <i class="fas fa-tasks"></i>
+                            <span>Gestión de Tareas</span>
+                        </a>
+                    </li>
+                    <li class="nav-item professor-only" style="display: none;">
+                        <a href="#" data-section="evaluaciones">
+                            <i class="fas fa-clipboard-check"></i>
+                            <span>Evaluaciones</span>
+                        </a>
+                    </li>
+                    <li class="nav-item professor-only" style="display: none;">
+                        <a href="#" data-section="estudiantes">
+                            <i class="fas fa-users"></i>
+                            <span>Mis Estudiantes</span>
+                        </a>
+                    </li>
+                    <li class="nav-item professor-only" style="display: none;">
+                        <a href="#" data-section="reportes">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Reportes</span>
+                        </a>
+                    </li>
+                    
+                    <!-- Navegación común -->
+                    <li class="nav-item">
+                        <a href="#" data-section="perfil">
+                            <i class="fas fa-user"></i>
+                            <span>Perfil</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="logout-btn" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Cerrar Sesión</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="menu-toggle" id="menuToggle">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h1 id="pageTitle">Dashboard</h1>
+                <div class="student-tips">
+                    <h4><i class="fas fa-lightbulb"></i> Consejos para obtener la máxima calificación:</h4>
+                    <ul>
+                        <li><strong>Dominio del tema:</strong> Investiga a fondo y practica explicar conceptos con ejemplos cotidianos</li>
+                        <li><strong>Participación:</strong> Asegúrate de que todos los miembros participen equitativamente</li>
+                        <li><strong>Claridad:</strong> Usa un lenguaje claro y organiza las ideas secuencialmente</li>
+                        <li><strong>Colaboración:</strong> Practica las transiciones entre participantes</li>
+                        <li><strong>Actitud:</strong> Muestra entusiasmo y mantén contacto visual con la audiencia</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeModal('studentRubricModal')">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para entregar tarea (estudiante) -->
+    <div class="modal" id="submitTaskModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Entregar Tarea: Presentación Conceptos Fundamentales</h3>
+                <button class="modal-close" onclick="closeModal('submitTaskModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="studentTaskForm" class="student-submission-form">
+                    <div class="team-info-section">
+                        <h4>Información del Equipo</h4>
+                        <div class="form-group">
+                            <label for="teamName">Nombre del Equipo</label>
+                            <input type="text" id="teamName" name="team_name" required 
+                                   placeholder="Ej: Equipo Alpha">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="teamMembers">Integrantes del Equipo</label>
+                            <textarea id="teamMembers" name="team_members" rows="3" required
+                                      placeholder="Nombres completos de todos los integrantes, uno por línea"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="submission-details">
+                        <h4>Detalles de la Entrega</h4>
+                        <div class="form-group">
+                            <label for="presentationTopic">Tema de Presentación</label>
+                            <input type="text" id="presentationTopic" name="topic" 
+                                   value="Conceptos Fundamentales de Bases de Datos" readonly>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="submissionComments">Comentarios Adicionales</label>
+                            <textarea id="submissionComments" name="comments" rows="4"
+                                      placeholder="Cualquier información adicional que desees compartir..."></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="file-upload-section">
+                        <h4>Archivos de Entrega</h4>
+                        <div class="upload-area" id="uploadArea">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <div class="upload-text">
+                                <p><strong>Arrastra archivos aquí o haz clic para seleccionar</strong></p>
+                                <p>Síntesis escrita (PDF, DOC, DOCX) - Máximo 10MB</p>
+                            </div>
+                            <input type="file" id="fileInput" name="files" multiple 
+                                   accept=".pdf,.doc,.docx" style="display: none;">
+                        </div>
+                        
+                        <div class="uploaded-files" id="uploadedFiles" style="display: none;">
+                            <h5>Archivos seleccionados:</h5>
+                            <div id="fileList"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="submission-checklist">
+                        <h4>Lista de Verificación</h4>
+                        <div class="checklist">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="checklist" value="team_formed">
+                                <span class="checkbox-custom"></span>
+                                Equipo formado de 3-4 integrantes
+                            </label>
+                            
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="checklist" value="presentation_ready">
+                                <span class="checkbox-custom"></span>
+                                Presentación de 10 minutos preparada
+                            </label>
+                            
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="checklist" value="examples_included">
+                                <span class="checkbox-custom"></span>
+                                Ejemplos prácticos incluidos
+                            </label>
+                            
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="checklist" value="document_attached">
+                                <span class="checkbox-custom"></span>
+                                Síntesis escrita de 2 páginas adjunta
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('submitTaskModal')">Cancelar</button>
+                <button class="btn btn-outline-primary" onclick="saveSubmissionDraft()">Guardar Borrador</button>
+                <button class="btn btn-primary" onclick="submitStudentTask()">Entregar Tarea</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/dashboard.js"></script>
+    <script>
+        // JavaScript específico para el dashboard integrado
+        
+        // Funciones para estudiantes
+        function viewTaskDetails(taskId) {
+            showNotification('Cargando detalles de la tarea...', 'info');
+            // En producción cargaría detalles específicos
+        }
+        
+        function submitTask(taskId) {
+            showModal('submitTaskModal');
+        }
+        
+        function viewRubricForStudent(rubricId) {
+            showModal('studentRubricModal');
+        }
+        
+        function submitTaskStudent(taskId) {
+            showModal('submitTaskModal');
+        }
+        
+        function submitStudentTask() {
+            const form = document.getElementById('studentTaskForm');
+            const formData = new FormData(form);
+            
+            // Validar checklist
+            const checkedItems = document.querySelectorAll('input[name="checklist"]:checked');
+            if (checkedItems.length < 4) {
+                showNotification('Por favor completa todos los elementos de la lista de verificación', 'warning');
+                return;
+            }
+            
+            // Validar archivos
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files.length) {
+                showNotification('Por favor adjunta la síntesis escrita', 'warning');
+                return;
+            }
+            
+            showLoading('Enviando tarea...');
+            
+            // Simular envío
+            setTimeout(() => {
+                hideLoading();
+                closeModal('submitTaskModal');
+                showNotification('¡Tarea entregada exitosamente!', 'success');
+                
+                // Actualizar interfaz
+                updateTaskStatus();
+            }, 2000);
+        }
+        
+        function saveSubmissionDraft() {
+            showNotification('Borrador guardado automáticamente', 'info');
+        }
+        
+        function updateTaskStatus() {
+            // Actualizar el estado de la tarea en la interfaz
+            const taskCard = document.querySelector('.task-card.urgent');
+            if (taskCard) {
+                const statusIndicator = taskCard.querySelector('.task-status');
+                statusIndicator.className = 'task-status completed';
+                
+                const actionsContainer = taskCard.querySelector('.task-actions');
+                actionsContainer.innerHTML = `
+                    <span class="delivery-status">
+                        <i class="fas fa-check-circle"></i> Entregada
+                    </span>
+                    <small>Enviada el ${new Date().toLocaleDateString()}</small>
+                `;
+            }
+            
+            // Actualizar contador de tareas pendientes
+            const pendingCounter = document.getElementById('studentTareasPendientes');
+            if (pendingCounter) {
+                const currentCount = parseInt(pendingCounter.textContent);
+                pendingCounter.textContent = currentCount - 1;
+            }
+        }
+        
+        // Funciones para profesores
+        function viewGrades(subjectCode) {
+            window.open(`task-management.html?subject=${subjectCode}&tab=submissions`, '_blank');
+        }
+        
+        // Configurar upload de archivos
+        document.addEventListener('DOMContentLoaded', function() {
+            setupFileUpload();
+        });
+        
+        function setupFileUpload() {
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+            const uploadedFiles = document.getElementById('uploadedFiles');
+            const fileList = document.getElementById('fileList');
+            
+            if (!uploadArea || !fileInput) return;
+            
+            // Click para seleccionar archivos
+            uploadArea.addEventListener('click', () => fileInput.click());
+            
+            // Drag and drop
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+            
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+            
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                handleFiles(files);
+            });
+            
+            // Selección de archivos
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+        }
+        
+        function handleFiles(files) {
+            const uploadedFiles = document.getElementById('uploadedFiles');
+            const fileList = document.getElementById('fileList');
+            
+            if (files.length > 0) {
+                uploadedFiles.style.display = 'block';
+                fileList.innerHTML = '';
+                
+                Array.from(files).forEach((file, index) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.innerHTML = `
+                        <div class="file-info">
+                            <i class="fas fa-file-alt"></i>
+                            <span class="file-name">${file.name}</span>
+                            <span class="file-size">(${formatFileSize(file.size)})</span>
+                        </div>
+                        <button type="button" class="remove-file" onclick="removeFile(${index})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    fileList.appendChild(fileItem);
+                });
+            }
+        }
+        
+        function removeFile(index) {
+            const fileInput = document.getElementById('fileInput');
+            const dt = new DataTransfer();
+            
+            // Recrear FileList sin el archivo removido
+            Array.from(fileInput.files).forEach((file, i) => {
+                if (i !== index) {
+                    dt.items.add(file);
+                }
+            });
+            
+            fileInput.files = dt.files;
+            handleFiles(fileInput.files);
+            
+            if (fileInput.files.length === 0) {
+                document.getElementById('uploadedFiles').style.display = 'none';
+            }
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Mostrar dashboard según rol del usuario
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentUser = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+            
+            if (currentUser.role === 'profesor' || currentUser.role === 'admin') {
+                // Mostrar dashboard de profesor
+                document.getElementById('student-dashboard').style.display = 'none';
+                document.getElementById('professor-dashboard').style.display = 'block';
+                
+                // Mostrar navegación de profesor
+                document.querySelectorAll('.professor-only').forEach(item => {
+                    item.style.display = 'block';
+                });
+                
+                // Ocultar navegación de estudiante
+                document.querySelectorAll('.student-only').forEach(item => {
+                    item.style.display = 'none';
+                });
+                
+            } else {
+                // Mostrar dashboard de estudiante (por defecto)
+                document.getElementById('student-dashboard').style.display = 'block';
+                document.getElementById('professor-dashboard').style.display = 'none';
+                
+                // Mostrar navegación de estudiante
+                document.querySelectorAll('.student-only').forEach(item => {
+                    item.style.display = 'block';
+                });
+                
+                // Ocultar navegación de profesor
+                document.querySelectorAll('.professor-only').forEach(item => {
+                    item.style.display = 'none';
+                });
+            }
+        });
+    </script>
+    
+    <!-- Estilos adicionales para las nuevas funcionalidades -->
+    <style>
+        .subject-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .subject-card .card-header h3 {
+            color: white;
+        }
+        
+        .subject-code {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-right: 8px;
+        }
+        
+        .subject-credits {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        
+        .current-topic {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 16px;
+            border-radius: 8px;
+            margin: 12px 0;
+        }
+        
+        .pending-tasks {
+            margin-top: 16px;
+        }
+        
+        .task-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        
+        .task-item h6 {
+            margin: 0 0 4px 0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .task-item p {
+            margin: 0 0 8px 0;
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        
+        .task-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        
+        .professor-subject {
+            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+        }
+        
+        .subject-stats {
+            display: flex;
+            gap: 8px;
+            font-size: 11px;
+            opacity: 0.9;
+        }
+        
+        .block-summary h4 {
+            color: white;
+            margin-bottom: 8px;
+        }
+        
+        .recent-activity {
+            margin: 16px 0;
+        }
+        
+        .activity-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        
+        .activity-item i {
+            width: 16px;
+        }
+        
+        .activity-item small {
+            margin-left: auto;
+            opacity: 0.7;
+        }
+        
+        .professor-actions {
+            margin-top: 16px;
+            display: flex;
+            gap: 8px;
+        }
+        
+        .featured-card {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            color: white;
+        }
+        
+        .featured-card .card-header h3 {
+            color: white;
+        }
+        
+        .quick-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+        
+        .quick-actions .btn {
+            flex: 1;
+        }
+        
+        .tasks-overview {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        
+        .task-stats {
+            display: flex;
+            justify-content: space-around;
+            gap: 20px;
+        }
+        
+        .task-stat-item {
+            text-align: center;
+        }
+        
+        .stat-number {
+            display: block;
+            font-size: 24px;
+            font-weight: 700;
+            color: #4F46E5;
+            margin-bottom: 4px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #64748B;
+        }
+        
+        .task-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #E2E8F0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .task-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .task-card.urgent {
+            border-left-color: #EF4444;
+        }
+        
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .task-subject {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            color: #1E293B;
+        }
+        
+        .task-due-date {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            color: #EF4444;
+        }
+        
+        .task-content h3 {
+            margin: 0 0 12px 0;
+            color: #1E293B;
+        }
+        
+        .task-description {
+            color: #64748B;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+        
+        .task-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .task-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            color: #64748B;
+        }
+        
+        .task-requirements h4 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #1E293B;
+        }
+        
+        .task-requirements ul {
+            margin: 0;
+            padding-left: 20px;
+            color: #64748B;
+            font-size: 14px;
+        }
+        
+        .task-requirements li {
+            margin-bottom: 4px;
+        }
+        
+        .subjects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .subject-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            border: 1px solid #E2E8F0;
+        }
+        
+        .subject-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .subject-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+        }
+        
+        .subject-info {
+            flex: 1;
+        }
+        
+        .subject-info h3 {
+            margin: 0 0 4px 0;
+            color: #1E293B;
+        }
+        
+        .subject-info p {
+            margin: 0;
+            color: #64748B;
+            font-size: 14px;
+        }
+        
+        .subject-grade {
+            font-size: 24px;
+            font-weight: 700;
+            color: #10B981;
+        }
+        
+        .subject-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 16px;
+        }
+        
+        .subject-stats .stat {
+            text-align: center;
+        }
+        
+        .subject-stats .stat span {
+            display: block;
+            font-size: 16px;
+            font-weight: 600;
+            color: #1E293B;
+        }
+        
+        .subject-stats .stat label {
+            font-size: 12px;
+            color: #64748B;
+            margin-top: 4px;
+        }
+        
+        .student-submission-form {
+            max-width: 100%;
+        }
+        
+        .team-info-section,
+        .submission-details,
+        .file-upload-section,
+        .submission-checklist {
+            margin-bottom: 24px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .submission-checklist:last-child {
+            border-bottom: none;
+        }
+        
+        .upload-area {
+            border: 2px dashed #CBD5E1;
+            border-radius: 8px;
+            padding: 32px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-area:hover {
+            border-color: #4F46E5;
+            background: #F8FAFC;
+        }
+        
+        .upload-area.dragover {
+            border-color: #4F46E5;
+            background: rgba(79, 70, 229, 0.05);
+        }
+        
+        .upload-icon {
+            font-size: 32px;
+            color: #94A3B8;
+            margin-bottom: 12px;
+        }
+        
+        .upload-text p {
+            margin: 4px 0;
+            color: #64748B;
+        }
+        
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: #F8FAFC;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .file-name {
+            font-weight: 500;
+            color: #1E293B;
+        }
+        
+        .file-size {
+            color: #64748B;
+            font-size: 12px;
+        }
+        
+        .remove-file {
+            background: none;
+            border: none;
+            color: #EF4444;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+        }
+        
+        .remove-file:hover {
+            background: rgba(239, 68, 68, 0.1);
+        }
+        
+        .checklist {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .student-tips {
+            background: #F0F9FF;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #0EA5E9;
+            margin-top: 20px;
+        }
+        
+        .student-tips h4 {
+            margin: 0 0 12px 0;
+            color: #0F172A;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .student-tips ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .student-tips li {
+            margin-bottom: 8px;
+            color: #334155;
+        }
+        
+        .rubric-display-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .rubric-display-table th,
+        .rubric-display-table td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #E2E8F0;
+        }
+        
+        .rubric-display-table th {
+            background: #F8FAFC;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .delivery-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #10B981;
+            font-weight: 500;
+        }
+        
+        .text-success { color: #10B981; }
+        .text-info { color: #3B82F6; }
+    </style>
+</body>
+</html><div class="topbar-right">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Buscar...">
+                    </div>
+                    
+                    <div class="notifications">
+                        <button class="notification-btn">
+                            <i class="fas fa-bell"></i>
+                            <span class="notification-badge">3</span>
+                        </button>
+                    </div>
+
+                    <div class="user-profile">
+                        <div class="user-avatar">
+                            <img src="https://via.placeholder.com/40x40/4F46E5/white?text=JP" alt="Usuario" id="userAvatar">
+                        </div>
+                        <div class="user-info">
+                            <span class="user-name" id="userName">Juan Pérez</span>
+                            <span class="user-role" id="userRole">Estudiante</span>
+                        </div>
+                        <button class="dropdown-toggle">
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Sections -->
+            <div class="content-wrapper">
+                <!-- Dashboard Section -->
+                <section id="dashboard-section" class="content-section active">
+                    <!-- Dashboard para Estudiantes -->
+                    <div id="student-dashboard">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-book-open"></i>
+                                </div>
+                                <div class="stat-content">
+                                    <h3 id="studentMaterias">6</h3>
+                                    <p>Materias Inscritas</p>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-chart-line"></i>
+                                </div>
+                                <div class="stat-content">
+                                    <h3 id="studentPromedio">8.5</h3>
+                                    <p>Promedio General</p>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-tasks"></i>
+                                </div>
+                                <div class="stat-content">
+                                    <h3 id="studentTareasPendientes">4</h3>
+                                    <p>Tareas Pendientes</p>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-trophy"></i>
+                                </div>
+                                <div class="stat-content">
+                                    <h3 id="studentCreditos">42</h3>
+                                    <p>Créditos Obtenidos</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-grid">
+                            <!-- Materia Base de Datos -->
+                            <div class="dashboard-card subject-card">
+                                <div class="card-header">
+                                    <h3><i class="fas fa-database"></i> Base de Datos</h3>
+                                    <div class="subject-meta">
+                                        <span class="subject-code">BD001</span>
+                                        <span class="subject-credits">4 créditos</span>
+                                    </div>
+                                </div>
+                                <div class="card-content">
+                                    <div class="subject-progress">
+                                        <div class="progress-info">
+                                            <span>Progreso del curso</span>
+                                            <span>33% (1/3 sesiones)</span>
+                                        </div>
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" style="width: 33%"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="current-topic">
+                                        <h4>Bloque Actual: Fundamentos de las bases de datos</h4>
+                                        <p><strong>Próxima sesión:</strong> Sintaxis básica de SQL</p>
+                                        <p><strong>Fecha:</strong> Miércoles 4 Sept, 10:00 AM</p>
+                                    </div>
+                                    
+                                    <div class="pending-tasks">
+                                        <h5>Tareas Pendientes:</h5>
+                                        <div class="task-item">
+                                            <div class="task-status pending"></div>
+                                            <div class="task-info">
+                                                <h6>Presentación Grupal: Conceptos Fundamentales</h6>
+                                                <p>Vence: 15 Sept 2025</p>
+                                                <div class="task-actions">
+                                                    <button class="btn btn-sm btn-outline-primary" onclick="viewTaskDetails(1)">
+                                                        <i class="fas fa-eye"></i> Ver Detalles
+                                                    </button>
+                                                    <button class="btn btn-sm btn-primary" onclick="submitTask(1)">
+                                                        <i class="fas fa-upload"></i> Entregar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <h3>Próximas Clases</h3>
+                                    <button class="card-action">Ver Horario Completo</button>
+                                </div>
+                                <div class="card-content">
+                                    <div class="class-item">
+                                        <div class="class-time">10:00 AM</div>
+                                        <div class="class-info">
+                                            <h4>Base de Datos</h4>
+                                            <p>Aula 201 - Prof. Ana Martínez</p>
+                                            <small>Sintaxis básica de SQL</small>
+                                        </div>
+                                    </div>
+                                    <div class="class-item">
+                                        <div class="class-time">02:00 PM</div>
+                                        <div class="class-info">
+                                            <h4>Matemáticas Avanzadas</h4>
+                                            <p>Aula 305 - Prof. García</p>
+                                            <small>Cálculo diferencial</small>
+                                        </div>
+                                    </div>
+                                    <div class="class-item">
+                                        <div class="class-time">04:00 PM</div>
+                                        <div class="class-info">
+                                            <h4>Programación Web</h4>
+                                            <p>Lab 3 - Prof. López</p>
+                                            <small>JavaScript avanzado</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard para Profesores -->
+                    <div id="professor-dashboard" style="display: none;">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-chalkboard-teacher"></i>
+                                </div>
+                                <div class="stat-content">
+                                    <h3 id="professorMaterias">3</h3>
+                                    <p>Materias Impartidas</p>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div class="stat-content">
+                                    <h3 id="professorEstudiantes">125</h3>
+                                    <p>Estudiantes Totales</p>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-tasks"></i>
+                                </div>
+                                <div class="stat-content">
+                                    <h3 id="professorTareas">12</h3>
+                                    <p>Tareas Activas</p>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-clipboard-check"></i>
+                                </div>
+                                <div class="stat-content">
+                                    <h3 id="professorRevisiones">8</h3>
+                                    <p>Por Revisar</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-grid">
+                            <!-- Acceso rápido a gestión de tareas -->
+                            <div class="dashboard-card featured-card">
+                                <div class="card-header">
+                                    <h3><i class="fas fa-star"></i> Gestión de Tareas</h3>
+                                </div>
+                                <div class="card-content">
+                                    <p>Crea, gestiona y evalúa tareas para tus estudiantes con rúbricas profesionales.</p>
+                                    <div class="quick-actions">
+                                        <button class="btn btn-primary" onclick="window.open('task-management.html', '_blank')">
+                                            <i class="fas fa-plus-circle"></i> Nueva Tarea
+                                        </button>
+                                        <button class="btn btn-outline-primary" onclick="window.open('task-management.html?tab=submissions', '_blank')">
+                                            <i class="fas fa-eye"></i> Ver Entregas
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Materia Base de Datos - Vista Profesor -->
+                            <div class="dashboard-card subject-card professor-subject">
+                                <div class="card-header">
+                                    <h3><i class="fas fa-database"></i> Base de Datos (BD001)</h3>
+                                    <div class="subject-stats">
+                                        <span><i class="fas fa-users"></i> 45 estudiantes</span>
+                                        <span><i class="fas fa-calendar"></i> Semestre 3</span>
+                                    </div>
+                                </div>
+                                <div class="card-content">
+                                    <div class="block-summary">
+                                        <h4>Bloque 1: Fundamentos de las bases de datos</h4>
+                                        <div class="block-progress">
+                                            <span>Progreso: 1/3 sesiones completadas</span>
+                                            <div class="progress-bar">
+                                                <div class="progress-fill" style="width: 33%"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="recent-activity">
+                                        <h5>Actividad Reciente:</h5>
+                                        <div class="activity-item">
+                                            <i class="fas fa-check-circle text-success"></i>
+                                            <span>12 equipos entregaron "Presentación Conceptos Fundamentales"</span>
+                                            <small>Hace 2 horas</small>
+                                        </div>
+                                        <div class="activity-item">
+                                            <i class="fas fa-calendar-plus text-info"></i>
+                                            <span>Sesión 2 programada para mañana</span>
+                                            <small>Ayer</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="professor-actions">
+                                        <button class="btn btn-sm btn-primary" onclick="window.open('task-management.html?subject=bd001', '_blank')">
+                                            <i class="fas fa-cog"></i> Gestionar
+                                        </button>
+                                        <button class="btn btn-sm btn-success" onclick="viewGrades('bd001')">
+                                            <i class="fas fa-chart-bar"></i> Ver Calificaciones
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Sección Tareas Estudiante -->
+                <section id="tareas-estudiante-section" class="content-section">
+                    <h2>Mis Tareas</h2>
+                    
+                    <div class="tasks-overview">
+                        <div class="task-stats">
+                            <div class="task-stat-item">
+                                <span class="stat-number">4</span>
+                                <span class="stat-label">Pendientes</span>
+                            </div>
+                            <div class="task-stat-item">
+                                <span class="stat-number">2</span>
+                                <span class="stat-label">Próximas a vencer</span>
+                            </div>
+                            <div class="task-stat-item">
+                                <span class="stat-number">8</span>
+                                <span class="stat-label">Completadas</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tasks-container">
+                        <!-- Tarea de Base de Datos -->
+                        <div class="task-card urgent">
+                            <div class="task-header">
+                                <div class="task-subject">
+                                    <i class="fas fa-database"></i>
+                                    <span>Base de Datos</span>
+                                </div>
+                                <div class="task-due-date">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Vence: 15 Sept 2025</span>
+                                </div>
+                            </div>
+                            
+                            <div class="task-content">
+                                <h3>Presentación Grupal: Conceptos Fundamentales de BD</h3>
+                                <p class="task-description">
+                                    Trabajar en equipos de 3-4 estudiantes para investigar y presentar los conceptos 
+                                    fundamentales de las bases de datos. Incluir ejemplos prácticos y fomentar 
+                                    participación de todos los miembros.
+                                </p>
+                                
+                                <div class="task-details">
+                                    <div class="task-meta">
+                                        <span><i class="fas fa-users"></i> Trabajo en equipo</span>
+                                        <span><i class="fas fa-star"></i> 10 puntos</span>
+                                        <span><i class="fas fa-table"></i> Evaluación por rúbrica</span>
+                                    </div>
+                                    
+                                    <div class="task-requirements">
+                                        <h4>Requisitos:</h4>
+                                        <ul>
+                                            <li>Formar equipos de 3-4 estudiantes</li>
+                                            <li>Presentación de 10 minutos</li>
+                                            <li>Incluir ejemplos prácticos</li>
+                                            <li>Entregar síntesis escrita de 2 páginas</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                
+                                <div class="task-actions">
+                                    <button class="btn btn-outline-primary" onclick="viewRubricForStudent(1)">
+                                        <i class="fas fa-eye"></i> Ver Rúbrica
+                                    </button>
+                                    <button class="btn btn-primary" onclick="submitTaskStudent(1)">
+                                        <i class="fas fa-upload"></i> Entregar Trabajo
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Más tareas -->
+                        <div class="task-card">
+                            <div class="task-header">
+                                <div class="task-subject">
+                                    <i class="fas fa-calculator"></i>
+                                    <span>Matemáticas</span>
+                                </div>
+                                <div class="task-due-date">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Vence: 20 Sept 2025</span>
+                                </div>
+                            </div>
+                            
+                            <div class="task-content">
+                                <h3>Ejercicios de Cálculo Diferencial</h3>
+                                <p class="task-description">
+                                    Resolver los ejercicios 1-20 del capítulo 5. Mostrar procedimiento completo.
+                                </p>
+                                
+                                <div class="task-actions">
+                                    <button class="btn btn-outline-primary">
+                                        <i class="fas fa-download"></i> Descargar PDF
+                                    </button>
+                                    <button class="btn btn-primary">
+                                        <i class="fas fa-upload"></i> Entregar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Otras secciones existentes -->
+                <section id="materias-section" class="content-section">
+                    <h2>Mis Materias</h2>
+                    
+                    <div class="subjects-grid">
+                        <!-- Base de Datos -->
+                        <div class="subject-card">
+                            <div class="subject-header">
+                                <div class="subject-icon">
+                                    <i class="fas fa-database"></i>
+                                </div>
+                                <div class="subject-info">
+                                    <h3>Base de Datos</h3>
+                                    <p>BD001 • Prof. Ana Martínez</p>
+                                </div>
+                                <div class="subject-grade">8.5</div>
+                            </div>
+                            
+                            <div class="subject-progress">
+                                <div class="progress-info">
+                                    <span>Progreso</span>
+                                    <span>33%</span>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 33%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="subject-stats">
+                                <div class="stat">
+                                    <span>4</span>
+                                    <label>Créditos</label>
+                                </div>
+                                <div class="stat">
+                                    <span>1</span>
+                                    <label>Tareas pendientes</label>
+                                </div>
+                                <div class="stat">
+                                    <span>3</span>
+                                    <label>Sesiones</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Más materias -->
+                        <div class="subject-card">
+                            <div class="subject-header">
+                                <div class="subject-icon">
+                                    <i class="fas fa-calculator"></i>
+                                </div>
+                                <div class="subject-info">
+                                    <h3>Matemáticas Avanzadas</h3>
+                                    <p>MAT301 • Prof. García</p>
+                                </div>
+                                <div class="subject-grade">8.8</div>
+                            </div>
+                            
+                            <div class="subject-progress">
+                                <div class="progress-info">
+                                    <span>Progreso</span>
+                                    <span>65%</span>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 65%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="subject-stats">
+                                <div class="stat">
+                                    <span>3</span>
+                                    <label>Créditos</label>
+                                </div>
+                                <div class="stat">
+                                    <span>2</span>
+                                    <label>Tareas pendientes</label>
+                                </div>
+                                <div class="stat">
+                                    <span>8</span>
+                                    <label>Sesiones</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="calificaciones-section" class="content-section">
+                    <h2>Calificaciones</h2>
+                    <div class="grades-container">
+                        <!-- Materia Base de Datos -->
+                        <div class="grade-card">
+                            <div class="grade-header">
+                                <h3><i class="fas fa-database"></i> Base de Datos</h3>
+                                <div class="overall-grade">8.5</div>
+                            </div>
+                            
+                            <div class="grade-breakdown">
+                                <div class="grade-item">
+                                    <span class="grade-name">Presentación Grupal: Conceptos Fundamentales</span>
+                                    <span class="grade-date">15 Sept 2025</span>
+                                    <span class="grade-value pending">Pendiente</span>
+                                </div>
+                                <!-- Más calificaciones aquí -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="horario-section" class="content-section">
+                    <h2>Mi Horario</h2>
+                    <div class="schedule-container">
+                        <div class="schedule-grid">
+                            <!-- Horario semanal aquí -->
+                            <div class="schedule-day">
+                                <h4>Miércoles</h4>
+                                <div class="schedule-slot">
+                                    <div class="time">10:00 - 11:30</div>
+                                    <div class="class-info">
+                                        <div class="class-name">Base de Datos</div>
+                                        <div class="class-location">Aula 201</div>
+                                        <div class="class-topic">Sintaxis básica de SQL</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="perfil-section" class="content-section">
+                    <h2>Mi Perfil</h2>
+                    <p>Información del perfil del usuario...</p>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal para ver rúbrica (estudiante) -->
+    <div class="modal" id="studentRubricModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>Rúbrica de Evaluación: Conceptos Fundamentales de BD</h3>
+                <button class="modal-close" onclick="closeModal('studentRubricModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="rubric-info">
+                    <p><strong>Descripción:</strong> Esta rúbrica evaluará tu presentación grupal sobre conceptos básicos de bases de datos.</p>
+                    <p><strong>Puntaje máximo:</strong> 10 puntos</p>
+                </div>
+                
+                <div class="student-rubric-table">
+                    <table class="rubric-display-table">
+                        <thead>
+                            <tr>
+                                <th>Criterio</th>
+                                <th>Peso</th>
+                                <th>Descripción</th>
+                                <th>Niveles de Desempeño</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Dominio del tema</strong></td>
+                                <td>25%</td>
+                                <td>Conocimiento y comprensión del contenido técnico</td>
+                                <td>
+                                    <div class="performance-levels">
+                                        <span class="level-badge level-excellent">Excelente (10)</span>
+                                        <span class="level-badge level-very-good">Muy bueno (9)</span>
+                                        <span class="level-badge level-acceptable">Aceptable (8)</span>
+                                        <span class="level-badge level-regular">Regular (7)</span>
+                                        <span class="level-badge level-failing">Reprobatorio (≤6)</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Participación en equipo</strong></td>
+                                <td>20%</td>
+                                <td>Nivel de contribución y colaboración</td>
+                                <td>
+                                    <div class="performance-levels">
+                                        <span class="level-badge level-excellent">Excelente (10)</span>
+                                        <span class="level-badge level-very-good">Muy bueno (9)</span>
+                                        <span class="level-badge level-acceptable">Aceptable (8)</span>
+                                        <span class="level-badge level-regular">Regular (7)</span>
+                                        <span class="level-badge level-failing">Reprobatorio (≤6)</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <!-- Más criterios... -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!DOCTYPE html>
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Portal Estudiantil</title>
     <link rel="stylesheet" href="css/dashboard.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
-
 <body>
     <div class="dashboard-container">
         <!-- Sidebar -->
@@ -78,13 +2341,13 @@
                     </button>
                     <h1 id="pageTitle">Dashboard</h1>
                 </div>
-
+                
                 <div class="topbar-right">
                     <div class="search-box">
                         <i class="fas fa-search"></i>
                         <input type="text" placeholder="Buscar...">
                     </div>
-
+                    
                     <div class="notifications">
                         <button class="notification-btn">
                             <i class="fas fa-bell"></i>
@@ -94,8 +2357,7 @@
 
                     <div class="user-profile">
                         <div class="user-avatar">
-                            <img src="https://via.placeholder.com/40x40/4F46E5/white?text=JP" alt="Usuario"
-                                id="userAvatar">
+                            <img src="https://via.placeholder.com/40x40/4F46E5/white?text=JP" alt="Usuario" id="userAvatar">
                         </div>
                         <div class="user-info">
                             <span class="user-name" id="userName">Juan Pérez</span>
@@ -122,7 +2384,7 @@
                                 <p>Materias Activas</p>
                             </div>
                         </div>
-
+                        
                         <div class="stat-card">
                             <div class="stat-icon">
                                 <i class="fas fa-chart-line"></i>
@@ -132,7 +2394,7 @@
                                 <p>Promedio General</p>
                             </div>
                         </div>
-
+                        
                         <div class="stat-card">
                             <div class="stat-icon">
                                 <i class="fas fa-tasks"></i>
@@ -142,7 +2404,7 @@
                                 <p>Tareas Pendientes</p>
                             </div>
                         </div>
-
+                        
                         <div class="stat-card">
                             <div class="stat-icon">
                                 <i class="fas fa-trophy"></i>
@@ -243,5 +2505,4 @@
 
     <script src="js/dashboard.js"></script>
 </body>
-
 </html>
